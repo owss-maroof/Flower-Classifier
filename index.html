@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Iris Classifier</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 520px;
+      margin: 60px auto;
+      padding: 0 20px;
+      background: #f5f5f5;
+    }
+    h2 { color: #333; text-align: center; }
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      margin-bottom: 14px;
+      font-size: 14px;
+      color: #555;
+    }
+    input[type="number"] {
+      display: block;
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 10px;
+      width: 100%;
+      padding: 10px;
+      background: #4285F4;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #result {
+      background: white;
+      border-radius: 10px;
+      padding: 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      display: none;
+    }
+    #flower-name {
+      font-size: 20px;
+      font-weight: bold;
+      color: #2e7d32;
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    #error { color: red; margin-top: 10px; display: none; font-size: 14px; }
+    canvas { margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h2>Iris Flower Classifier</h2>
+
+  <div class="card">
+    <label>Sepal Length (cm)
+      <input type="number" id="sepal_length" step="0.1" placeholder="e.g. 5.1">
+    </label>
+    <label>Sepal Width (cm)
+      <input type="number" id="sepal_width" step="0.1" placeholder="e.g. 3.5">
+    </label>
+    <label>Petal Length (cm)
+      <input type="number" id="petal_length" step="0.1" placeholder="e.g. 1.4">
+    </label>
+    <label>Petal Width (cm)
+      <input type="number" id="petal_width" step="0.1" placeholder="e.g. 0.2">
+    </label>
+    <button id="btn" onclick="predict()">Predict</button>
+    <div id="error"></div>
+  </div>
+
+  <div id="result">
+    <div id="flower-name"></div>
+    <canvas id="chart" height="160"></canvas>
+  </div>
+
+  <script>
+    const API_URL = "";
+    let chartInstance = null;
+
+    async function predict() {
+      const fields = ["sepal_length", "sepal_width", "petal_length", "petal_width"];
+      const data = {};
+      for (const f of fields) {
+        const val = parseFloat(document.getElementById(f).value);
+        if (isNaN(val)) {
+          showError("Please fill in all four fields.");
+          return;
+        }
+        data[f] = val;
+      }
+
+      document.getElementById("error").style.display = "none";
+      document.getElementById("result").style.display = "none";
+      const btn = document.getElementById("btn");
+      btn.disabled = true;
+      btn.textContent = "Predicting...";
+
+      try {
+        const response = await fetch(`${API_URL}/predict`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(data)
+        });
+
+        if (!response.ok) throw new Error("Server error");
+        const result = await response.json();
+
+        // Show predicted name
+        document.getElementById("flower-name").textContent =
+          "Predicted: " + result.predicted_class;
+
+        // Build chart data
+        const labels = Object.keys(result.confidence);
+        const values = Object.values(result.confidence);
+        const colors = ["#4285F4", "#34A853", "#EA4335"];
+
+        // Destroy old chart if exists
+        if (chartInstance) chartInstance.destroy();
+
+        const ctx = document.getElementById("chart").getContext("2d");
+        chartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [{
+              label: "Confidence (%)",
+              data: values,
+              backgroundColor: colors,
+              borderRadius: 6,
+              borderSkipped: false,
+            }]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: ctx => ` ${ctx.parsed.y}%`
+                }
+              }
+            },
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 100,
+                ticks: {
+                  callback: val => val + "%"
+                }
+              }
+            }
+          }
+        });
+
+        document.getElementById("result").style.display = "block";
+      } catch (err) {
+        showError("Prediction failed. Is the server running?");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Predict";
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById("error");
+      el.textContent = msg;
+      el.style.display = "block";
+    }
+  </script>
+</body>
+</html>
